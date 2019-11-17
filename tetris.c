@@ -1,3 +1,4 @@
+
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
@@ -5,10 +6,17 @@
 
 #define BGM_SIZE 35
 
+void add_mino();
+int check_down();
+
+
 //ゲームの状態
 unsigned char state = 0;
 //スコア
 unsigned char score = 0;
+//現在捜査しているミノ
+unsigned char now_mino;
+unsigned char x,y;
 
 //BGMデータ配列
 unsigned char bgm[BGM_SIZE] =
@@ -19,9 +27,12 @@ unsigned char bgm_len[BGM_SIZE] =
 volatile unsigned char m = 0;
 volatile unsigned char note_length = 2;
 unsigned char cnt_t0 = 100;
+unsigned char fall_cnt_max =500;
+unsigned char fall_cnt =0;
+
+
 
 volatile unsigned char led[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
-;
 unsigned char pat[12][8] = {
     {7, 5, 5, 5, 7, 0, 0, 0}, // 0
     {1, 1, 1, 1, 1, 0, 0, 0}, // 1
@@ -36,6 +47,30 @@ unsigned char pat[12][8] = {
     {0, 0, 0, 0, 0, 0, 0, 1}, // .
     {0, 0, 0, 0, 0, 0, 7, 0}, // _
 };
+
+// unsigned char block[8][8]={
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0},
+//     {0,0,0,0,0,0,0,0}
+// };
+unsigned char mino[7][8]={
+    {7,0,0,0,0,0,0,0},
+    {6,6,0,0,0,0,0,0},
+    {2,7,0,0,0,0,0,0},
+    {4,7,0,0,0,0,0,0},
+    {1,7,0,0,0,0,0,0},
+    {3,6,0,0,0,0,0,0},
+    {6,3,0,0,0,0,0,0}
+};
+
+unsigned char mino_x[7]={3,2,3,3,3,3,3};
+unsigned char mino_y[7]={1,2,2,2,2,2,2};
+
 unsigned char title[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
 
 //led表示
@@ -61,6 +96,9 @@ ISR(PCINT1_vect)
         {
             state = 1;
             score = 0;
+            for(int i=0;i<8;i++)
+                led[i] = 0x00;
+            add_mino();
         }
         break;
     case 1: //ゲーム画面
@@ -122,9 +160,55 @@ ISR(TIMER0_COMPA_vect)
     }
 }
 
+
 ISR(TIMER1_COMPA_vect)
 {
     update_led();
+    if(state==1){
+        if(fall_cnt==fall_cnt_max){
+            //1つ下へ
+            y++;
+            if(check_down()==1){
+                for(int i =7;i>=0;i--){
+                    if(i>=y && i<y+mino_y[now_mino]){
+                        led[i] = led[i] | mino[now_mino][i-y];
+                        led[i-1] = led[i-1] & ~mino[now_mino][i-y];
+                    }
+                }
+            }else{
+                add_mino();
+            }
+            fall_cnt=0;
+        }else{
+            fall_cnt++;
+        }
+    }
+}
+
+void add_mino(){
+    int rnd = rand()%7;
+    now_mino = rnd;
+    x=0;
+    y=0;
+    for(int i=0;i<8;i++){
+        led[i] = led[i] | mino[now_mino][i];
+    }
+    
+}
+
+int check_down(){
+    int flg =1;
+    for(int i =0;i<3;i++){
+        if(y+mino_y[now_mino] > 8){
+            flg=- 1;
+            break;
+        // }else if(led[y+mino_y[now_mino]][x+i]==1){
+        }else if((led[y+mino_y[now_mino]-1] >> (x+i)) & 0x01 == 1){
+            flg = -1;
+            break;
+        }
+    }
+    return flg;
 }
 
 int main(void)
