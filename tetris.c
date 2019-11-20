@@ -48,7 +48,7 @@ unsigned char fall_cnt =0;
 
 
 
-volatile unsigned char led[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
+volatile unsigned char led[8]={0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
 unsigned char pat[12][8] = {
     {7, 5, 5, 5, 7, 0, 0, 0}, // 0
     {1, 1, 1, 1, 1, 0, 0, 0}, // 1
@@ -191,9 +191,9 @@ ISR(TIMER1_COMPA_vect)
     if(state==1){
         if(fall_cnt==fall_cnt_max){
             //1つ下へ
-            y++;
+            
             if(check_down()==1){
-                
+                y++;
                 for(int i =0;i<8;i++){
                     if(i>=y && i<y+mino_y[now_mino]){
                         led[i] = block[i] | (mino[now_mino][i-y] << x);
@@ -239,7 +239,6 @@ void add_mino(){
 void move_to_right_left(){
     for(int i =0;i<8;i++){
         if(i>=y && i<y+mino_y[now_mino]){
-            // led[i] = block[i] | (mino[now_mino][i-y] << x);
             led[i] = mino[now_mino][i-y] << x;
         }else{
             led[i] = block[i];
@@ -284,46 +283,52 @@ int check_add(){
 }
 
 int check_down(){
-    int flg =1;
-    if(y==7)
+    if((y+mino_y[now_mino]-1 == 7))
         return 0;
-    for(int i =0;i<3;i++){
-        if(y+mino_y[now_mino] > 7){
-            flg=0;
-            break;
-        // }else if(led[y+mino_y[now_mino]][x+i]==1){
-        }else if((block[y+mino_y[now_mino]] >> (x+1)) & 0x01 == 1){
-            flg = 0;
-            break;
+    for(int i=x;i<x+mino_x[now_mino];i++){
+        for(int j=y;j<y+mino_y[now_mino];j++){
+            if((mino[now_mino][j-y] >> (i-x) ) & 0x01 == 1){
+                if((block[j+1] >> i) & 0x01 == 1){
+                    return 0;
+                }
+            }
         }
     }
-    return flg;
+    return 1;
 }
 
 int check_right(){
-    int flg=1;
     if(x==0)
         return 0;
     for(int i=y;i<y+mino_y[now_mino];i++){
-        if((block[i]>>(x-1)) & 0x01 == 1){
-            flg=0;
-            break;
+        for(int j=x;j<x+mino_x[now_mino];j++){
+            if((mino[now_mino][i-y] >> (j-x)) & 0x01 == 0x01){
+                if((block[i] >> j-1 ) & 0x01 == 0x01){
+                    return 0;
+                }else{
+                    break;
+                }
+            }
         }
     }
-    return flg;
+    return 1;
 }
 
 int check_left(){
-    int flg=1;
-    if(x+mino_x[now_mino] == 8)
+    if( x+mino_x[now_mino] -1 == 7)
         return 0;
     for(int i=y;i<y+mino_y[now_mino];i++){
-        if((block[i]>>(x+mino_x[now_mino]-1)) & 0x01 == 1){
-            flg=0;
-            break;
+        for(int j=x+mino_x[now_mino];j>x;j--){
+            if((mino[now_mino][i-y] >> (j-x)) & 0x01 == 0x01){
+                if((block[i] >> j+1 ) & 0x01 == 0x01){
+                    return 0;
+                }else{
+                    break;
+                }
+            }
         }
     }
-    return flg;
+    return 1;
 }
 
 void check_row(){
