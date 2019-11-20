@@ -6,11 +6,15 @@
 
 #define BGM_SIZE 35
 
+void reset_block();
+
 void add_mino();        //テトリミノの追加
 void rotate();          //テトリミノの回転
-void move_to_right_left();
+void move_to_right_left();  //左右への移動
 void delete_row();      //行の削除
-void change_to_block();
+void change_to_block(); //テトリミノをブロックに変更
+
+void set_score();       //LEDにスコアを表示
 
 int check_add();        //追加チェック
 int check_down();       //下方チェック
@@ -101,6 +105,7 @@ ISR(PCINT1_vect)
         {
             state = 1;
             score = 0;
+            reset_block();
             for(int i=0;i<8;i++)
                 led[i] = 0x00;
             add_mino();
@@ -133,6 +138,9 @@ ISR(PCINT1_vect)
         if (sw == 0x03)
         {
             state = 0;
+            for(int i=0;i<8;i++){
+                led[i] = title[i];
+            }
         }
         break;
     default:
@@ -206,16 +214,26 @@ ISR(TIMER1_COMPA_vect)
     }
 }
 
+void reset_block(){
+    for(int i=0;i<8;i++){
+        block[i] = 0x00;
+    }
+}
+
 void add_mino(){
     int rnd = rand()%7;
     now_mino = rnd;
-    x=0;
+    x=3;
     y=0;
-    for(int i=0;i<8;i++){
-        unsigned char result[8];
-        led[i] = block[i] | mino[now_mino][i];
+    if(check_add()==1){
+        for(int i=0;i<8;i++){
+            unsigned char result[8];
+            led[i] = block[i] | mino[now_mino][i]<<3;
+        }
+    }else{
+        state=2;
+        set_score();
     }
-    
 }
 
 void move_to_right_left(){
@@ -242,6 +260,27 @@ void delete_row(int row){
         block[i]=block[i-1];
     }
     block[0] =0x00;
+}
+
+void set_score(){
+    int ten = score / 10;
+    int one = score % 10;
+    for(int i=0;i<8;i++){
+        led[i] = pat[ten][i] << 4 | pat[one][i];
+    }
+}
+
+int check_add(){
+    for(int i = x;i<x+mino_x[now_mino];i++){
+        for(int j = 0; j<mino_y[now_mino];j++){
+            if((mino[now_mino][j] >> (i-x)) & 0x01 == 0x01){
+                if((block[j] >> i) & 0x01 == 0x01){
+                    return 0;
+                }
+            }
+        }
+    }
+    return 1;
 }
 
 int check_down(){
@@ -291,6 +330,7 @@ void check_row(){
     for(int i=7;i>=0;i--){
         if(block[i]==0xff){
             delete_row(i);
+            score++;
         }
     }
 }
