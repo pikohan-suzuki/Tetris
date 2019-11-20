@@ -1,22 +1,34 @@
-
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define BGM_SIZE 35
 
-void add_mino();
-int check_down();
+void add_mino();        //テトリミノの追加
+void rotate();          //テトリミノの回転
+void move_to_right_left();
+void delete_row();      //行の削除
+void change_to_block();
 
+int check_add();        //追加チェック
+int check_down();       //下方チェック
+int check_left();       //左チェック
+int check_right();      //右チェック
+int check_rotate();     //回転チェック
+void check_row();      //消去できる行があるかのチェック
 
 //ゲームの状態
 unsigned char state = 0;
 //スコア
 unsigned char score = 0;
-//現在捜査しているミノ
+//現在操作しているミノ
 unsigned char now_mino;
 unsigned char x,y;
+unsigned char dire=0;
+
+unsigned int wait =0;
 
 //BGMデータ配列
 unsigned char bgm[BGM_SIZE] =
@@ -48,19 +60,11 @@ unsigned char pat[12][8] = {
     {0, 0, 0, 0, 0, 0, 7, 0}, // _
 };
 
-// unsigned char block[8][8]={
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0},
-//     {0,0,0,0,0,0,0,0}
-// };
+unsigned char block[8]={0,0,0,0,0,0,0,0};
+
 unsigned char mino[7][8]={
     {7,0,0,0,0,0,0,0},
-    {6,6,0,0,0,0,0,0},
+    {3,3,0,0,0,0,0,0},
     {2,7,0,0,0,0,0,0},
     {4,7,0,0,0,0,0,0},
     {1,7,0,0,0,0,0,0},
@@ -89,6 +93,7 @@ void update_led()
 ISR(PCINT1_vect)
 {
     int sw = (~PINC >> 4) & 3;
+    if(wait>50){
     switch (state)
     {
     case 0: //タイトル画面
@@ -105,10 +110,17 @@ ISR(PCINT1_vect)
         switch (sw)
         {
         case 1:
-            /* code */
+            if(check_left()==1){
+                x++;
+                move_to_right_left();        
+            }
+            
             break;
         case 2:
-            /* code */
+            if(check_right() == 1){
+                x--;
+                move_to_right_left();
+            }
             break;
         case 3:
             /* code */
@@ -126,12 +138,15 @@ ISR(PCINT1_vect)
     default:
         break;
     }
+    wait=0;
+    }
 }
 
 //BGM再生
 ISR(TIMER0_COMPA_vect)
 {
-    if (state == 1)
+    //if (state == 1)
+    if(0)
     {
         if (cnt_t0 == 0)
         {
@@ -158,6 +173,7 @@ ISR(TIMER0_COMPA_vect)
     }else{
         OCR2A=0;
     }
+    wait++;
 }
 
 
@@ -169,13 +185,18 @@ ISR(TIMER1_COMPA_vect)
             //1つ下へ
             y++;
             if(check_down()==1){
-                for(int i =7;i>=0;i--){
+                
+                for(int i =0;i<8;i++){
                     if(i>=y && i<y+mino_y[now_mino]){
-                        led[i] = led[i] | mino[now_mino][i-y];
-                        led[i-1] = led[i-1] & ~mino[now_mino][i-y];
+                        led[i] = block[i] | (mino[now_mino][i-y] << x);
+                    }else{
+                        led[i] = block[i];
+                        
                     }
                 }
             }else{
+                change_to_block();
+                check_row();
                 add_mino();
             }
             fall_cnt=0;
@@ -191,24 +212,87 @@ void add_mino(){
     x=0;
     y=0;
     for(int i=0;i<8;i++){
-        led[i] = led[i] | mino[now_mino][i];
+        unsigned char result[8];
+        led[i] = block[i] | mino[now_mino][i];
     }
     
 }
 
+void move_to_right_left(){
+    for(int i =0;i<8;i++){
+        if(i>=y && i<y+mino_y[now_mino]){
+            // led[i] = block[i] | (mino[now_mino][i-y] << x);
+            led[i] = mino[now_mino][i-y] << x;
+        }else{
+            led[i] = block[i];
+                        
+        }
+    }
+}
+
+void change_to_block(){
+        for(int i=y;i<y+mino_y[now_mino];i++){
+            block[i] = block[i] | mino[now_mino][i-y] << x;
+        }
+}
+
+void delete_row(int row){
+    block[row] = 0x00;
+    for(int i = row;i>=1;i--){
+        block[i]=block[i-1];
+    }
+    block[0] =0x00;
+}
+
 int check_down(){
     int flg =1;
+    if(y==7)
+        return 0;
     for(int i =0;i<3;i++){
-        if(y+mino_y[now_mino] > 8){
-            flg=- 1;
+        if(y+mino_y[now_mino] > 7){
+            flg=0;
             break;
         // }else if(led[y+mino_y[now_mino]][x+i]==1){
-        }else if((led[y+mino_y[now_mino]-1] >> (x+i)) & 0x01 == 1){
-            flg = -1;
+        }else if((block[y+mino_y[now_mino]] >> (x+1)) & 0x01 == 1){
+            flg = 0;
             break;
         }
     }
     return flg;
+}
+
+int check_right(){
+    int flg=1;
+    if(x==0)
+        return 0;
+    for(int i=y;i<y+mino_y[now_mino];i++){
+        if((block[i]>>(x-1)) & 0x01 == 1){
+            flg=0;
+            break;
+        }
+    }
+    return flg;
+}
+
+int check_left(){
+    int flg=1;
+    if(x+mino_x[now_mino] == 8)
+        return 0;
+    for(int i=y;i<y+mino_y[now_mino];i++){
+        if((block[i]>>(x+mino_x[now_mino]-1)) & 0x01 == 1){
+            flg=0;
+            break;
+        }
+    }
+    return flg;
+}
+
+void check_row(){
+    for(int i=7;i>=0;i--){
+        if(block[i]==0xff){
+            delete_row(i);
+        }
+    }
 }
 
 int main(void)
