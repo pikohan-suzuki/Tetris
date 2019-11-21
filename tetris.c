@@ -24,7 +24,7 @@ int check_add();    //追加チェック
 int check_down();   //下方チェック
 int check_left();   //左チェック
 int check_right();  //右チェック
-int check_rotate(); //回転チェック
+int check_rotate(int add_x,int add_y,int count_width,int count_height); //回転チェック
 void check_row();   //消去できる行があるかのチェック
 
 //ゲームの状態
@@ -289,6 +289,9 @@ void delete_row(int row)
 
 void rotate()
 {
+
+    int add_x = 0;
+    int add_y = 0;
     for (int i = 0; i < 3; i++)
     {
         array_for_rotate[i] = 0x00;
@@ -305,14 +308,14 @@ void rotate()
             array_for_rotate[0] = 0;
             array_for_rotate[1] = 7;
             array_for_rotate[2] = 0;
-            y--;
+            add_y--;
         }
         else
         {
             array_for_rotate[0] = 2;
             array_for_rotate[1] = 2;
             array_for_rotate[2] = 2;
-            x--;
+            add_x--;
         }
     }
     else if (now_mino == 2 || now_mino == 3 || now_mino == 4)
@@ -323,7 +326,7 @@ void rotate()
             {
                 array_for_rotate[i] = mino[now_mino][i - 1];
             }
-            y--;
+            add_y--;
             array_for_rotate[0] = 0x00;
         }
         else if ((mino[now_mino][0] & mino[now_mino][1] & mino[now_mino][2] & 0x01) == 0x01)
@@ -332,7 +335,7 @@ void rotate()
             {
                 array_for_rotate[i] = mino[now_mino][i] << 1;
             }
-            x--;
+            add_x--;
         }
         else
         {
@@ -351,7 +354,7 @@ void rotate()
                 array_for_rotate[i] = mino[now_mino][i - 1];
             }
             array_for_rotate[0] = 0x00;
-            y--;
+            add_y--;
         }
         else if (is_odd_rotate == 0x03)
         {
@@ -359,7 +362,7 @@ void rotate()
             {
                 array_for_rotate[i] = mino[now_mino][i] << 1;
             }
-            x--;
+            add_x--;
         }
         else
         {
@@ -378,7 +381,6 @@ void rotate()
         }
     }
 
-
     rotate_array();
 
     //上詰め
@@ -389,7 +391,7 @@ void rotate()
             array_for_rotate[i] = array_for_rotate[i + 1];
         }
         array_for_rotate[2] = 0x00;
-        y++;
+        add_y++;
     }
 
     //右詰め
@@ -408,7 +410,7 @@ void rotate()
         {
             array_for_rotate[i] = array_for_rotate[i] >> 1;
         }
-        x++;
+        add_x++;
     }
 
     //テトリミノのwidthカウント
@@ -419,7 +421,6 @@ void rotate()
         if (((rank >> i) & 0x01) == 0x01)
             count_width++;
     }
-    mino_x[now_mino] = count_width;
 
     //テトリミノのheightカウント
     int count_height = 0;
@@ -428,14 +429,19 @@ void rotate()
         if ((array_for_rotate[i] & 0x07) != 0x00)
             count_height++;
     }
-    mino_y[now_mino] = count_height;
 
-    for (int i = 0; i < 3; i++)
+    if (check_rotate(add_x,add_y,count_width,count_height) == 1)
     {
-        mino[now_mino][i] = array_for_rotate[i];
+        for (int i = 0; i < 3; i++)
+        {
+            mino[now_mino][i] = array_for_rotate[i];
+        }
+        mino_x[now_mino] = count_width;
+        mino_y[now_mino] = count_height;
+        x = x + add_x;
+        y = y + add_y;
+        update_led_array();
     }
-
-    update_led_array();
 }
 
 void rotate_array()
@@ -543,6 +549,25 @@ int check_left()
                 else
                 {
                     break;
+                }
+            }
+        }
+    }
+    return 1;
+}
+
+int check_rotate(int add_x,int add_y,int count_width,int count_height)
+{
+    if(x+add_x+count_width-1 > 7 || x+add_x<0){
+        return 0;
+    }else if(y+add_y+count_height-1 >7 || y + add_y < 0){
+        return 0;
+    }
+    for(int i=0;i<3;i++){
+        for(int j=0;j<3;j++){
+            if(((array_for_rotate[i] >> j) & 0x01) == 0x01){
+                if(((block[y+add_y+i] >> x+add_x+j) & 0x01 ) == 0x01){
+                    return 0;
                 }
             }
         }
