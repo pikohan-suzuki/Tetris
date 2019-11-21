@@ -6,6 +6,7 @@
 #include <time.h>
 
 #define BGM_SIZE 35
+#define LED_CNT 5
 
 void reset_block();
 void update_led_array();
@@ -33,9 +34,10 @@ unsigned char score = 0;
 //現在操作しているミノ
 unsigned char now_mino;
 unsigned char x, y;
-unsigned char dire = 0;
 
 unsigned int wait = 0;
+
+unsigned char is_odd_rotate = 0;
 
 //BGMデータ配列
 unsigned char bgm[BGM_SIZE] =
@@ -46,8 +48,8 @@ unsigned char bgm_len[BGM_SIZE] =
 volatile unsigned char m = 0;
 volatile unsigned char note_length = 2;
 unsigned char cnt_t0 = 100;
-unsigned char fall_cnt_max = 500;
-unsigned char fall_cnt = 0;
+unsigned int fall_cnt_max = 250;
+unsigned int fall_cnt = 0;
 unsigned char array_for_rotate[3];
 
 volatile unsigned char led[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
@@ -69,13 +71,13 @@ unsigned char pat[12][8] = {
 unsigned char block[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 unsigned char mino[7][8] = {
-    {7, 0, 0, 0, 0, 0, 0, 0},
-    {3, 3, 0, 0, 0, 0, 0, 0},
-    {2, 7, 0, 0, 0, 0, 0, 0},
-    {4, 7, 0, 0, 0, 0, 0, 0},
-    {1, 7, 0, 0, 0, 0, 0, 0},
-    {3, 6, 0, 0, 0, 0, 0, 0},
-    {6, 3, 0, 0, 0, 0, 0, 0}};
+    {7, 0, 0, 0, 0, 0, 0, 0},  // -
+    {3, 3, 0, 0, 0, 0, 0, 0},  // ■
+    {2, 7, 0, 0, 0, 0, 0, 0},  // Τ
+    {4, 7, 0, 0, 0, 0, 0, 0},  // Γ
+    {1, 7, 0, 0, 0, 0, 0, 0},  // L
+    {3, 6, 0, 0, 0, 0, 0, 0},  // _|-
+    {6, 3, 0, 0, 0, 0, 0, 0}}; // -|_
 
 unsigned char mino_x[7] = {3, 2, 3, 3, 3, 3, 3};
 unsigned char mino_y[7] = {1, 2, 2, 2, 2, 2, 2};
@@ -194,7 +196,7 @@ ISR(TIMER0_COMPA_vect)
 
 ISR(TIMER1_COMPA_vect)
 {
-    update_led();
+
     if (state == 1)
     {
         if (fall_cnt == fall_cnt_max)
@@ -235,7 +237,7 @@ void update_led_array()
     {
         if (i >= y && i < y + mino_y[now_mino])
         {
-            led[i] = mino[now_mino][i - y] << x;
+            led[i] = block[i] | (mino[now_mino][i - y] << x);
         }
         else
         {
@@ -253,6 +255,7 @@ void add_mino()
     y = 0;
     if (check_add() == 1)
     {
+        is_odd_rotate = 0;
         for (int i = 0; i < 8; i++)
         {
             unsigned char result[8];
@@ -290,26 +293,123 @@ void rotate()
     {
         array_for_rotate[i] = 0x00;
     }
-    switch (now_mino)
+
+    if (now_mino == 1)
     {
-    case 0:
-        if (mino[0][0] == 0x00)
+        return;
+    }
+    else if (now_mino == 0)
+    {
+        if (mino[0][0] == 0x07)
         {
             array_for_rotate[0] = 0;
             array_for_rotate[1] = 7;
             array_for_rotate[2] = 0;
+            y--;
         }
-        break;
-    case 1:
-        return;
-    default:
+        else
+        {
+            array_for_rotate[0] = 2;
+            array_for_rotate[1] = 2;
+            array_for_rotate[2] = 2;
+            x--;
+        }
+    }
+    else if (now_mino == 2 || now_mino == 3 || now_mino == 4)
+    {
+        if ((mino[now_mino][0] & 0x07) == 0x07)
+        {
+            for (int i = 1; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i - 1];
+            }
+            y--;
+            array_for_rotate[0] = 0x00;
+        }
+        else if ((mino[now_mino][0] & mino[now_mino][1] & mino[now_mino][2] & 0x01) == 0x01)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i] << 1;
+            }
+            x--;
+        }
+        else
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i];
+            }
+        }
+    }
+    else if (now_mino == 5 || now_mino == 6)
+    {
+        if (is_odd_rotate == 0x02)
+        {
+            for (int i = 1; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i - 1];
+            }
+            array_for_rotate[0] = 0x00;
+            y--;
+        }
+        else if (is_odd_rotate == 0x03)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i] << 1;
+            }
+            x--;
+        }
+        else
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                array_for_rotate[i] = mino[now_mino][i];
+            }
+        }
+        is_odd_rotate = (is_odd_rotate + 1) & 0x03;
+    }
+    else
+    {
         for (int i = 0; i < 3; i++)
         {
             array_for_rotate[i] = mino[now_mino][i];
         }
-        break;
     }
+
+
     rotate_array();
+
+    //上詰め
+    if ((array_for_rotate[0] & 0x07) == 0x00)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            array_for_rotate[i] = array_for_rotate[i + 1];
+        }
+        array_for_rotate[2] = 0x00;
+        y++;
+    }
+
+    //右詰め
+    int flg = 1;
+    for (int i = 0; i < 3; i++)
+    {
+        if ((array_for_rotate[i] & 0x01) == 0x01)
+        {
+            flg = 0;
+            break;
+        }
+    }
+    if (flg == 1)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            array_for_rotate[i] = array_for_rotate[i] >> 1;
+        }
+        x++;
+    }
 
     //テトリミノのwidthカウント
     int rank = array_for_rotate[0] | array_for_rotate[1] | array_for_rotate[2];
@@ -329,41 +429,6 @@ void rotate()
             count_height++;
     }
     mino_y[now_mino] = count_height;
-
-    //上詰め
-    if(count_height !=3){
-        if (array_for_rotate[0] & 0x07 == 0x00)
-        {
-            for (int i = 0; i < 2; i++)
-            {
-                array_for_rotate[i] = array_for_rotate[i + 1];
-            }
-            array_for_rotate[2] = 0x00;
-            y++;
-        }
-    }
-
-    //右詰め
-    if(count_width !=3){
-        int flg = 1;
-        for (int i = 0; i < 3; i++)
-        {
-            if (array_for_rotate[i] & 0x01 == 0x01)
-            {
-                flg = 0;
-                break;
-            }
-        }
-        if (flg == 1)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                array_for_rotate[i] = array_for_rotate[i] >> 1;
-            }
-            x++;
-        }
-    }
-    
 
     for (int i = 0; i < 3; i++)
     {
@@ -515,20 +580,33 @@ int main(void)
     TCCR2B = 0x04;
     TCCR2A = 0x12;
     OCR2A = 141;
+
     //BGM再生用タイマー
     TCCR0B = 0x03;
     TCCR0A = 0x02;
     TIMSK0 = 0x02;
     OCR0A = 249;
 
+    //落下用タイマー
     TCCR1A = 0x02;
     TCCR1B = 0x03;
     OCR1A = 249;
     TIMSK1 |= _BV(OCIE0A);
 
     sei();
+
+    int cnt = 0;
     for (;;)
     {
+        if (cnt == LED_CNT)
+        {
+            update_led();
+            cnt = 0;
+        }
+        else
+        {
+            cnt++;
+        }
         wdt_reset();
     }
     return 0;
