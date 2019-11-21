@@ -2,14 +2,15 @@
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
 
 #define BGM_SIZE 35
+#define GAMEOVER_BGM_SIZE 11
 #define LED_CNT 5
 
-void reset_block();
-void update_led_array();
+void reset_block();      //ブロックの初期化
+void reset_mino();       //テトリミノのリセット
+void update_led_array(); //LED配列の更新
 
 void add_mino();           //テトリミノの追加
 void rotate();             //テトリミノの回転
@@ -20,12 +21,12 @@ void change_to_block();    //テトリミノをブロックに変更
 
 void set_score(); //LEDにスコアを表示
 
-int check_add();    //追加チェック
-int check_down();   //下方チェック
-int check_left();   //左チェック
-int check_right();  //右チェック
-int check_rotate(int add_x,int add_y,int count_width,int count_height); //回転チェック
-void check_row();   //消去できる行があるかのチェック
+int check_add();                                                           //追加チェック
+int check_down();                                                          //下方チェック
+int check_left();                                                          //左チェック
+int check_right();                                                         //右チェック
+int check_rotate(int add_x, int add_y, int count_width, int count_height); //回転チェック
+void check_row();                                                          //消去できる行があるかのチェック
 
 //ゲームの状態
 unsigned char state = 0;
@@ -34,23 +35,27 @@ unsigned char score = 0;
 //現在操作しているミノ
 unsigned char now_mino;
 unsigned char x, y;
-
+//ピンのチャタリング対策用wait
 unsigned int wait = 0;
-
+//回転回数
 unsigned char is_odd_rotate = 0;
 
 //BGMデータ配列
 unsigned char bgm[BGM_SIZE] =
     {0, 141, 189, 178, 158, 178, 189, 212, 178, 141, 158, 178, 189, 178, 158, 141, 178, 212, 158, 133, 105, 118, 133, 141, 178, 141, 158, 178, 189, 178, 158, 141, 178, 212, 0};
 unsigned char bgm_len[BGM_SIZE] =
-    {2, 2, 1, 1, 2, 1, 1, 3, 1, 2, 1, 1, 3, 1, 2, 2, 2, 4, 2, 1, 2, 1, 1, 3, 1, 2, 1, 1, 3, 1, 2, 2, 2, 3, 4};
+    {2, 2, 1, 1, 2, 1, 1, 3, 1, 2, 1, 1, 3, 1, 2, 2, 2, 4, 2, 1, 2, 1, 1, 3, 1, 2, 1, 1, 3, 1, 2, 2, 2, 3, 2};
+unsigned char gameover_bgm[GAMEOVER_BGM_SIZE] =
+    {0, 0, 62, 70, 62, 70, 62, 59, 62, 70, 62};
+unsigned char gameover_bgm_len[GAMEOVER_BGM_SIZE] =
+    {1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-volatile unsigned char m = 0;
-volatile unsigned char note_length = 2;
-unsigned char cnt_t0 = 100;
-unsigned int fall_cnt_max = 250;
-unsigned int fall_cnt = 0;
-unsigned char array_for_rotate[3];
+volatile unsigned char m = 0;           //BGMの添え字
+volatile unsigned char note_length = 2; //BGMのノーツの長さ
+unsigned char cnt_t0 = 100;             //BGMの１拍あたりのtimer値カウント用
+unsigned int fall_cnt_max = 250;        //落下スピード
+unsigned int fall_cnt = 0;              //落下用カウント
+unsigned char array_for_rotate[3];      //回転用配列
 
 volatile unsigned char led[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
 unsigned char pat[12][8] = {
@@ -68,8 +73,10 @@ unsigned char pat[12][8] = {
     {0, 0, 0, 0, 0, 0, 7, 0}, // _
 };
 
+//現在のブロック
 unsigned char block[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
+//使用中のテトリミノの状態
 unsigned char mino[7][8] = {
     {7, 0, 0, 0, 0, 0, 0, 0},  // -
     {3, 3, 0, 0, 0, 0, 0, 0},  // ■
@@ -78,10 +85,21 @@ unsigned char mino[7][8] = {
     {1, 7, 0, 0, 0, 0, 0, 0},  // L
     {3, 6, 0, 0, 0, 0, 0, 0},  // _|-
     {6, 3, 0, 0, 0, 0, 0, 0}}; // -|_
+//テトリミノ初期化用データ
+unsigned char mino_data[7][8] = {
+    {7, 0, 0, 0, 0, 0, 0, 0},  // -
+    {3, 3, 0, 0, 0, 0, 0, 0},  // ■
+    {2, 7, 0, 0, 0, 0, 0, 0},  // Τ
+    {4, 7, 0, 0, 0, 0, 0, 0},  // Γ
+    {1, 7, 0, 0, 0, 0, 0, 0},  // L
+    {3, 6, 0, 0, 0, 0, 0, 0},  // _|-
+    {6, 3, 0, 0, 0, 0, 0, 0}}; // -|_
 
+//テトリミノのheightとwidth
 unsigned char mino_x[7] = {3, 2, 3, 3, 3, 3, 3};
 unsigned char mino_y[7] = {1, 2, 2, 2, 2, 2, 2};
 
+//タイトルのled配列
 unsigned char title[8] = {0x57, 0x50, 0x17, 0x32, 0x06, 0xf4, 0x27, 0xd4};
 
 //led表示
@@ -97,28 +115,26 @@ void update_led()
     PORTB = led[scan];
 }
 
-ISR(PCINT1_vect)
-{
+//ピン入力割り込み
+ISR(PCINT1_vect){
     int sw = (~PINC >> 4) & 3;
-    if (wait > 50)
-    {
-        switch (state)
-        {
-        case 0: //タイトル画面
-            if (sw == 0x03)
-            {
-                state = 1;
-                score = 0;
-                srand(TCNT1);
-                reset_block();
-                for (int i = 0; i < 8; i++)
-                    led[i] = 0x00;
-                add_mino();
-            }
-            break;
-        case 1: //ゲーム画面
-            switch (sw)
-            {
+    if (wait > 50){
+        switch (state){
+            case 0: //タイトル画面
+                if (sw == 0x03){
+                    state = 1;
+                    score = 0;
+                    srand(TCNT1);
+                    reset_block();
+                    for (int i = 0; i < 8; i++)
+                        led[i] = 0x00;
+                    add_mino();
+                    m = 0;
+                    note_length = 2;
+                }
+                break;
+            case 1: //ゲーム画面
+                switch (sw){
             case 1:
                 if (check_left() == 1)
                 {
@@ -161,8 +177,7 @@ ISR(PCINT1_vect)
 //BGM再生
 ISR(TIMER0_COMPA_vect)
 {
-    //if (state == 1)
-    if (0)
+    if (state == 1)
     {
         if (cnt_t0 == 0)
         {
@@ -187,6 +202,32 @@ ISR(TIMER0_COMPA_vect)
             cnt_t0--;
         }
     }
+    else if (state == 2)
+    {
+        if (cnt_t0 == 0)
+        {
+            note_length--;
+            if (note_length == 0)
+            {
+                if (m + 1 == GAMEOVER_BGM_SIZE)
+                {
+                    OCR2A = 0;
+                    note_length = 1;
+                }
+                else
+                {
+                    m++;
+                    OCR2A = gameover_bgm[m];
+                    note_length = gameover_bgm_len[m];
+                }
+                cnt_t0 = 50;
+            }
+        }
+        else
+        {
+            cnt_t0--;
+        }
+    }
     else
     {
         OCR2A = 0;
@@ -194,9 +235,9 @@ ISR(TIMER0_COMPA_vect)
     wait++;
 }
 
+//落下用タイマー
 ISR(TIMER1_COMPA_vect)
 {
-
     if (state == 1)
     {
         if (fall_cnt == fall_cnt_max)
@@ -223,6 +264,7 @@ ISR(TIMER1_COMPA_vect)
     }
 }
 
+//ブロックの初期化
 void reset_block()
 {
     for (int i = 0; i < 8; i++)
@@ -231,6 +273,19 @@ void reset_block()
     }
 }
 
+//テトリミノの初期化
+void reset_mino()
+{
+    for (int j = 0; j < 7; j++)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            mino[j][i] = mino_data[j][i];
+        }
+    }
+}
+
+//テトリミノとブロックをLEDに反映する
 void update_led_array()
 {
     for (int i = 0; i < 8; i++)
@@ -246,9 +301,10 @@ void update_led_array()
     }
 }
 
+//ミノの追加
 void add_mino()
 {
-
+    reset_mino();
     int rnd = rand() % 7;
     now_mino = rnd;
     x = 3;
@@ -264,10 +320,13 @@ void add_mino()
     else
     {
         state = 2;
+        m = 0;
+        note_length = gameover_bgm_len[0];
         set_score();
     }
 }
 
+//テトリミノをブロックに変換する
 void change_to_block()
 {
     for (int i = y; i < y + mino_y[now_mino]; i++)
@@ -276,6 +335,7 @@ void change_to_block()
     }
 }
 
+//横にそろった行を削除して、下詰めする。
 void delete_row(int row)
 {
     block[row] = 0x00;
@@ -286,6 +346,7 @@ void delete_row(int row)
     block[0] = 0x00;
 }
 
+//テトリミノの回転
 void rotate()
 {
 
@@ -302,7 +363,7 @@ void rotate()
     }
     else if (now_mino == 0)
     {
-        if ((mino[0][0] & 0x07)== 0x07)
+        if ((mino[0][0] & 0x07) == 0x07)
         {
             array_for_rotate[0] = 0;
             array_for_rotate[1] = 7;
@@ -429,7 +490,7 @@ void rotate()
             count_height++;
     }
 
-    if (check_rotate(add_x,add_y,count_width,count_height) == 1)
+    if (check_rotate(add_x, add_y, count_width, count_height) == 1)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -443,6 +504,7 @@ void rotate()
     }
 }
 
+//配列の回転
 void rotate_array()
 {
     unsigned char result_array[3] = {0, 0, 0};
@@ -459,6 +521,7 @@ void rotate_array()
     }
 }
 
+//スコアをLEDに反映する
 void set_score()
 {
     int ten = score / 10;
@@ -469,6 +532,7 @@ void set_score()
     }
 }
 
+//テトリミノを追加できるかの判断
 int check_add()
 {
     for (int i = x; i < x + mino_x[now_mino]; i++)
@@ -487,6 +551,7 @@ int check_add()
     return 1;
 }
 
+//下へ移動できるかの判断
 int check_down()
 {
     if ((y + mino_y[now_mino] - 1 == 7))
@@ -507,6 +572,7 @@ int check_down()
     return 1;
 }
 
+//右へ移動できるかの判断
 int check_right()
 {
     if (x == 0)
@@ -531,13 +597,14 @@ int check_right()
     return 1;
 }
 
+//左へ移動できるかの判断
 int check_left()
 {
     if (x + mino_x[now_mino] - 1 == 7)
         return 0;
     for (int i = y; i < y + mino_y[now_mino]; i++)
     {
-        for (int j = x + mino_x[now_mino]-1; j >= x; j--)
+        for (int j = x + mino_x[now_mino] - 1; j >= x; j--)
         {
             if (((mino[now_mino][i - y] >> (j - x)) & 0x01) == 0x01)
             {
@@ -555,17 +622,25 @@ int check_left()
     return 1;
 }
 
-int check_rotate(int add_x,int add_y,int count_width,int count_height)
+//回転できるかの判断
+int check_rotate(int add_x, int add_y, int count_width, int count_height)
 {
-    if(x+add_x+count_width-1 > 7 || x+add_x<0){
-        return 0;
-    }else if(y+add_y+count_height-1 >7 || y + add_y < 0){
+    if (x + add_x + count_width - 1 > 7 || x + add_x < 0)
+    {
         return 0;
     }
-    for(int i=0;i<3;i++){
-        for(int j=0;j<3;j++){
-            if(((array_for_rotate[i] >> j) & 0x01) == 0x01){
-                if(((block[y+add_y+i] >> (x+add_x+j)) & 0x01 ) == 0x01){
+    else if (y + add_y + count_height - 1 > 7 || y + add_y < 0)
+    {
+        return 0;
+    }
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            if (((array_for_rotate[i] >> j) & 0x01) == 0x01)
+            {
+                if (((block[y + add_y + i] >> (x + add_x + j)) & 0x01) == 0x01)
+                {
                     return 0;
                 }
             }
@@ -574,14 +649,21 @@ int check_rotate(int add_x,int add_y,int count_width,int count_height)
     return 1;
 }
 
+//そろっている行はないかの判断
 void check_row()
 {
-    for (int i = 0; i <8; i++)
+    for (int i = 0; i < 8; i++)
     {
         if ((block[i] & 0xff) == 0xff)
         {
             delete_row(i);
             score++;
+            int fall_score = score;
+            if (score > 30)
+            {
+                fall_score = 30;
+            }
+            fall_cnt_max = 250 - 188 * fall_score / 30;
         }
     }
 }
