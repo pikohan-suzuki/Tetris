@@ -576,9 +576,9 @@ int check_rotate(int add_x,int add_y,int count_width,int count_height)
 
 void check_row()
 {
-    for (int i = 7; i >= 0; i--)
+    for (int i = 0; i <8; i++)
     {
-        if (block[i] == 0xff)
+        if ((block[i] & 0xff) == 0xff)
         {
             delete_row(i);
             score++;
