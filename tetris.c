@@ -258,7 +258,6 @@ void add_mino()
         is_odd_rotate = 0;
         for (int i = 0; i < 8; i++)
         {
-            unsigned char result[8];
             led[i] = block[i] | mino[now_mino][i] << 3;
         }
     }
@@ -303,7 +302,7 @@ void rotate()
     }
     else if (now_mino == 0)
     {
-        if (mino[0][0] == 0x07)
+        if ((mino[0][0] & 0x07)== 0x07)
         {
             array_for_rotate[0] = 0;
             array_for_rotate[1] = 7;
@@ -476,9 +475,9 @@ int check_add()
     {
         for (int j = 0; j < mino_y[now_mino]; j++)
         {
-            if ((mino[now_mino][j] >> (i - x)) & 0x01 == 0x01)
+            if (((mino[now_mino][j] >> (i - x)) & 0x01) == 0x01)
             {
-                if ((block[j] >> i) & 0x01 == 0x01)
+                if (((block[j] >> i) & 0x01) == 0x01)
                 {
                     return 0;
                 }
@@ -496,9 +495,9 @@ int check_down()
     {
         for (int j = y; j < y + mino_y[now_mino]; j++)
         {
-            if ((mino[now_mino][j - y] >> (i - x)) & 0x01 == 1)
+            if (((mino[now_mino][j - y] >> (i - x)) & 0x01) == 1)
             {
-                if ((block[j + 1] >> i) & 0x01 == 1)
+                if (((block[j + 1] >> i) & 0x01) == 1)
                 {
                     return 0;
                 }
@@ -516,9 +515,9 @@ int check_right()
     {
         for (int j = x; j < x + mino_x[now_mino]; j++)
         {
-            if ((mino[now_mino][i - y] >> (j - x)) & 0x01 == 0x01)
+            if (((mino[now_mino][i - y] >> (j - x)) & 0x01) == 0x01)
             {
-                if ((block[i] >> j - 1) & 0x01 == 0x01)
+                if (((block[i] >> (j - 1)) & 0x01) == 0x01)
                 {
                     return 0;
                 }
@@ -538,11 +537,11 @@ int check_left()
         return 0;
     for (int i = y; i < y + mino_y[now_mino]; i++)
     {
-        for (int j = x + mino_x[now_mino]; j > x; j--)
+        for (int j = x + mino_x[now_mino]-1; j >= x; j--)
         {
-            if ((mino[now_mino][i - y] >> (j - x)) & 0x01 == 0x01)
+            if (((mino[now_mino][i - y] >> (j - x)) & 0x01) == 0x01)
             {
-                if ((block[i] >> j + 1) & 0x01 == 0x01)
+                if (((block[i] >> (j + 1)) & 0x01) == 0x01)
                 {
                     return 0;
                 }
@@ -566,7 +565,7 @@ int check_rotate(int add_x,int add_y,int count_width,int count_height)
     for(int i=0;i<3;i++){
         for(int j=0;j<3;j++){
             if(((array_for_rotate[i] >> j) & 0x01) == 0x01){
-                if(((block[y+add_y+i] >> x+add_x+j) & 0x01 ) == 0x01){
+                if(((block[y+add_y+i] >> (x+add_x+j)) & 0x01 ) == 0x01){
                     return 0;
                 }
             }
